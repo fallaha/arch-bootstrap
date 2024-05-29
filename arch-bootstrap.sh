@@ -2,7 +2,7 @@
 #
 # arch-bootstrap: Bootstrap a base Arch Linux system using any GNU distribution.
 #
-# Dependencies: bash >= 4, coreutils, curl, sed, gawk, tar, gzip, chroot, xz, zstd.
+# Dependencies: bash, coreutils, curl, sed, gawk, tar, gzip, chroot, xz, zstd.
 # Project: https://github.com/tokland/arch-bootstrap
 #
 # Install:
@@ -21,13 +21,9 @@
 set -e -u -o pipefail
 
 # Packages needed by pacman (see get-pacman-dependencies.sh)
-PACMAN_PACKAGES=(
-  acl archlinux-keyring attr brotli bzip2 curl expat glibc gpgme libarchive
-  libassuan libgpg-error libnghttp2 libnghttp3 libssh2 lzo openssl pacman pacman-mirrorlist xz zlib
-  krb5 e2fsprogs keyutils libidn2 libunistring gcc-libs lz4 libpsl icu libunistring zstd
-)
-BASIC_PACKAGES=(${PACMAN_PACKAGES[*]} filesystem base)
-EXTRA_PACKAGES=(coreutils bash grep gawk file tar gzip systemd sed)
+PACMAN_PACKAGES="acl archlinux-keyring attr brotli bzip2 curl expat glibc gpgme libarchive libassuan libgpg-error libnghttp2 libnghttp3 libssh2 lzo openssl pacman pacman-mirrorlist xz zlib krb5 e2fsprogs keyutils libidn2 libunistring gcc-libs lz4 libpsl icu libunistring zstd"
+BASIC_PACKAGES="$PACMAN_PACKAGES filesystem base"
+EXTRA_PACKAGES="coreutils bash grep gawk file tar gzip systemd sed"
 DEFAULT_REPO_URL="http://mirrors.kernel.org/archlinux"
 DEFAULT_ARM_REPO_URL="http://mirror.archlinuxarm.org"
 DEFAULT_X86_REPO_URL="http://mirror.archlinux32.org"
@@ -49,9 +45,9 @@ fetch() {
 }
 
 fetch_file() {
-  local FILEPATH=$1
+  FILEPATH=$1
   shift
-  if [[ -e "$FILEPATH" ]]; then
+  if [ -e "$FILEPATH" ]; then
     curl -L -z "$FILEPATH" -o "$FILEPATH" "$@"
   else
     curl -L -o "$FILEPATH" "$@"
@@ -59,7 +55,7 @@ fetch_file() {
 }
 
 uncompress() {
-  local FILEPATH=$1 DEST=$2
+  FILEPATH=$1 DEST=$2
   
   case "$FILEPATH" in
     *.gz) 
@@ -77,8 +73,8 @@ uncompress() {
 ###
 
 get_default_repo() {
-  local ARCH=$1
-  if [[ "$ARCH" == arm* || "$ARCH" == aarch64 ]]; then
+  ARCH=$1
+  if [[ "$ARCH" == arm* || "$ARCH" == armv7h || "$ARCH" == aarch64 ]]; then
     echo $DEFAULT_ARM_REPO_URL
   elif [[ "$ARCH" == i*86 || "$ARCH" == pentium4 ]]; then
     echo $DEFAULT_X86_REPO_URL
@@ -88,8 +84,8 @@ get_default_repo() {
 }
 
 get_core_repo_url() {
-  local REPO_URL=$1 ARCH=$2
-  if [[ "$ARCH" == arm* || "$ARCH" == aarch64 || "$ARCH" == i*86 || "$ARCH" == pentium4 ]]; then
+  REPO_URL=$1 ARCH=$2
+  if [[ "$ARCH" == arm* || "$ARCH" == armv7h || "$ARCH" == aarch64 || "$ARCH" == i*86 || "$ARCH" == pentium4 ]]; then
     echo "${REPO_URL%/}/$ARCH/core"
   else
     echo "${REPO_URL%/}/core/os/$ARCH"
@@ -97,8 +93,8 @@ get_core_repo_url() {
 }
 
 get_template_repo_url() {
-  local REPO_URL=$1 ARCH=$2
-  if [[ "$ARCH" == arm* || "$ARCH" == aarch64 || "$ARCH" == i*86 || "$ARCH" == pentium4 ]]; then
+  REPO_URL=$1 ARCH=$2
+  if [[ "$ARCH" == arm* || "$ARCH" == armv7h || "$ARCH" == aarch64 || "$ARCH" == i*86 || "$ARCH" == pentium4 ]]; then
     echo "${REPO_URL%/}/$ARCH/\$repo"
   else
     echo "${REPO_URL%/}/\$repo/os/$ARCH"
@@ -106,7 +102,7 @@ get_template_repo_url() {
 }
 
 configure_pacman() {
-  local DEST=$1 ARCH=$2
+  DEST=$1 ARCH=$2
   debug "configure DNS and pacman"
   cp "/etc/resolv.conf" "$DEST/etc/resolv.conf"
   SERVER=$(get_template_repo_url "$REPO_URL" "$ARCH")
@@ -114,7 +110,7 @@ configure_pacman() {
 }
 
 configure_minimal_system() {
-  local DEST=$1
+  DEST=$1
   
   mkdir -p "$DEST/dev"
   sed -ie 's/^root:.*$/root:$1$GT9AUpJe$oXANVIjIzcnmOpY07iaGi\/:14657::::::/' "$DEST/etc/shadow"
@@ -132,7 +128,7 @@ configure_minimal_system() {
 }
 
 fetch_packages_list() {
-  local REPO=$1 
+  REPO=$1 
   
   debug "fetch packages list: $REPO/"
   fetch "$REPO/" | extract_href | awk -F"/" '{print $NF}' | sort -rn ||
@@ -140,13 +136,13 @@ fetch_packages_list() {
 }
 
 install_pacman_packages() {
-  local BASIC_PACKAGES=$1 DEST=$2 LIST=$3 DOWNLOAD_DIR=$4
+  BASIC_PACKAGES=$1 DEST=$2 LIST=$3 DOWNLOAD_DIR=$4
   debug "pacman package and dependencies: $BASIC_PACKAGES"
   
   for PACKAGE in $BASIC_PACKAGES; do
-    local FILE=$(echo "$LIST" | grep -m1 "^$PACKAGE-[[:digit:]].*\(\.gz\|\.xz\|\.zst\)$")
+    FILE=$(echo "$LIST" | grep -m1 "^$PACKAGE-[[:digit:]].*\(\.gz\|\.xz\|\.zst\)$")
     test "$FILE" || { debug "Error: cannot find package: $PACKAGE"; return 1; }
-    local FILEPATH="$DOWNLOAD_DIR/$FILE"
+    FILEPATH="$DOWNLOAD_DIR/$FILE"
     
     debug "download package: $REPO/$FILE"
     fetch_file "$FILEPATH" "$REPO/$FILE"
@@ -156,7 +152,7 @@ install_pacman_packages() {
 }
 
 configure_static_qemu() {
-  local ARCH=$1 DEST=$2
+  ARCH=$1 DEST=$2
   [[ "$ARCH" == arm* ]] && ARCH=arm
   QEMU_STATIC_BIN=$(which qemu-$ARCH-static || echo )
   [[ -e "$QEMU_STATIC_BIN" ]] ||\
@@ -165,7 +161,7 @@ configure_static_qemu() {
 }
 
 install_packages() {
-  local ARCH=$1 DEST=$2 PACKAGES=$3
+  ARCH=$1 DEST=$2 PACKAGES=$3
   debug "install packages: $PACKAGES"
   LC_ALL=C chroot "$DEST" /usr/bin/pacman \
     --noconfirm --arch $ARCH -Sy --overwrite \* $PACKAGES
@@ -178,11 +174,11 @@ show_usage() {
 main() {
   # Process arguments and options
   test $# -eq 0 && set -- "-h"
-  local ARCH=
-  local REPO_URL=
-  local USE_QEMU=
-  local DOWNLOAD_DIR=
-  local PRESERVE_DOWNLOAD_DIR=
+  ARCH=
+  REPO_URL=
+  USE_QEMU=
+  DOWNLOAD_DIR=
+  PRESERVE_DOWNLOAD_DIR=
   
   while getopts "qa:r:d:h" ARG; do
     case "$ARG" in
@@ -198,10 +194,10 @@ main() {
   test $# -eq 1 || { show_usage; return 1; }
   
   [[ -z "$ARCH" ]] && ARCH=$(uname -m)
-  [[ -z "$REPO_URL" ]] &&REPO_URL=$(get_default_repo "$ARCH")
+  [[ -z "$REPO_URL" ]] && REPO_URL=$(get_default_repo "$ARCH")
   
-  local DEST=$1
-  local REPO=$(get_core_repo_url "$REPO_URL" "$ARCH")
+  DEST=$1
+  REPO=$(get_core_repo_url "$REPO_URL" "$ARCH")
   [[ -z "$DOWNLOAD_DIR" ]] && DOWNLOAD_DIR=$(mktemp -d)
   mkdir -p "$DOWNLOAD_DIR"
   [[ -z "$PRESERVE_DOWNLOAD_DIR" ]] && trap "rm -rf '$DOWNLOAD_DIR'" KILL TERM EXIT
@@ -211,12 +207,12 @@ main() {
   
   # Fetch packages, install system and do a minimal configuration
   mkdir -p "$DEST"
-  local LIST=$(fetch_packages_list $REPO)
-  install_pacman_packages "${BASIC_PACKAGES[*]}" "$DEST" "$LIST" "$DOWNLOAD_DIR"
+  LIST=$(fetch_packages_list $REPO)
+  install_pacman_packages "$BASIC_PACKAGES" "$DEST" "$LIST" "$DOWNLOAD_DIR"
   configure_pacman "$DEST" "$ARCH"
   configure_minimal_system "$DEST"
   [[ -n "$USE_QEMU" ]] && configure_static_qemu "$ARCH" "$DEST"
-  install_packages "$ARCH" "$DEST" "${BASIC_PACKAGES[*]} ${EXTRA_PACKAGES[*]}"
+  install_packages "$ARCH" "$DEST" "$BASIC_PACKAGES $EXTRA_PACKAGES"
   configure_pacman "$DEST" "$ARCH" # Pacman must be re-configured
   [[ -z "$PRESERVE_DOWNLOAD_DIR" ]] && rm -rf "$DOWNLOAD_DIR"
   
